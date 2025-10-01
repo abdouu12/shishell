@@ -1,0 +1,8 @@
+# Ignore compiled files
+*.o
+*.exe
+shishell
+syscall
+
+# Ignore backups
+*~
