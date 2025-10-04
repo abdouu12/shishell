@@ -6,7 +6,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include "shishell.h"
-
+#include <errno.h>
 
 #define CHILD 0
 #define ERROR -1
@@ -15,19 +15,29 @@ void prompt(){
     printf("(shishell)>");
 }
 
-char* marge_paths(char* path,char* exe){
+char* merge_paths(char* path,char* exe){
     size_t len = strlen(path) + 1 + strlen(exe) +1;
     char* result = malloc(len);
     strcpy(result, path);
     strcat(result, "/");
     strcat(result, exe);
     return result;
+}
 
+void cd(char** argv, char* home){
+
+        if (argv[1] == NULL || strcmp(argv[1], "~") == 0) {
+            chdir(home);
+        }
+        else{
+            chdir(argv[1]);
+        }
 
 }
 
+
 void syscalls(char** argv) {
-    char* src_$PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/btats/bin";
+    char* src_$PATH = getenv( "PATH" );
     char* cpy_PATH;
     cpy_PATH = malloc(strlen(src_$PATH) +1);
     cpy_PATH = strcpy(cpy_PATH,src_$PATH);
@@ -35,26 +45,29 @@ void syscalls(char** argv) {
     char * relative_path  = strtok(cpy_PATH, ":");
     char* exe = argv[0];
 
+    int pid = fork();
+
     while(relative_path != NULL){
 
-    char * merged_path = marge_paths(relative_path, exe);
+        char * merged_path = merge_paths(relative_path, exe);
      
 
-    relative_path  = strtok(NULL, ":");
-    int pid = fork();
-    if (pid == CHILD){
-        execve(merged_path, argv, NULL);
-        free(merged_path);
-    }
-    else if (pid < 0){
-        perror("fork error");   
-    }
-    else{
-        wait(NULL);
-        return;
-    }
+        relative_path  = strtok(NULL, ":");
+    
+        if (pid == CHILD){
+            execve(merged_path,argv,NULL);
+            free(merged_path);            
+        }
+        else if (pid < 0){
+            perror("fork error");   
+        }
+        else{
+            wait(NULL);
+            return;
+        }
     
     }
+    perror("command not found");
     free(cpy_PATH);
     
 
@@ -64,9 +77,9 @@ void get_input(char** line){
     size_t len =0;
     ssize_t nread;
     while (nread = getline(line, &len, stdin) != 1){
-    if (*line)
-    (*line)[strcspn(*line, "\n")] = '\0';
-    return;
+        if (*line)
+        (*line)[strcspn(*line, "\n")] = '\0';
+        return;
     }
 }
 
@@ -81,8 +94,9 @@ int main(void){
     //useful variables
     int off_set= 0;
     //enviromental variables
-
+    char* home = getenv( "HOME" );    
     while(1){
+
     prompt();
     fflush(stdout);
 
@@ -95,29 +109,31 @@ int main(void){
     //input tokenization
     char* t = strtok(line," ");
     argv = malloc(argc * sizeof(char*));
+
     while (t != NULL){
-    argc++;
-    argv = realloc(argv, (argc)* sizeof(char*));
-    argv[off_set] = malloc(strlen(t)+1);
-    strcpy(argv[off_set],t);
-    off_set++;
-    t = strtok(NULL," ");
+        argc++;
+        argv = realloc(argv, (argc)* sizeof(char*));
+        argv[off_set] = malloc(strlen(t)+1);
+        strcpy(argv[off_set],t);
+        off_set++;
+        t = strtok(NULL," ");
     }
+
     argv = realloc(argv, (argc + 1) * sizeof(char*));
     argv[argc] = NULL;
-
-
-    if (strcmp(argv[0],"exit") == 0){
+    
+    if (strcmp(argv[0], "exit") == 0) {
         exit(0);
     }
-    else if (strcmp(argv[0],"cd") == 0) {
-        chdir(argv[1]);
+    else if (strcmp(argv[0], "cd") == 0) {
+        cd(argv,home);
     }
-
-
+    else{
     syscalls(argv);
+    }
     argc = 0;
     off_set = 0;
+
     free(argv);
     free(line);
     }
@@ -127,7 +143,10 @@ int main(void){
 
 
 
-
+// implemented getenv to get the PATH env dynamically
+// need to fix the built in commands conlficting with syscalls (fixed)
+// need to add error messages when invalid arguments are given as inputs
+//
 
 
 
